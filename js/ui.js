@@ -420,6 +420,16 @@ window.deletePost = async (id) => {
   try {
     await deleteReview(id);
     document.getElementById('modal-detail').classList.remove('active');
+    
+    // Refresh the UI explicitly after deleting
+    if (typeof switchView === 'function') {
+      switchView(state.currentTab);
+    } else {
+      if (state.currentTab === 'home') renderTimeline();
+      if (state.currentTab === 'ranking') renderRanking();
+      if (state.currentTab === 'map') updateMapMarkers();
+    }
+    
     alert('投稿を削除しました');
   } catch (e) {
     alert('削除に失敗しました: ' + e.message);
