@@ -66,9 +66,10 @@ const loadData = async () => {
     const mapped = data.map(db => ({
       id: db.id, userName: db.user_name, name: db.name, genre: db.genre,
       address: db.address, lat: db.lat, lng: db.lng, scenes: db.scenes || [],
+      timeSlot: db.time_slot, priceRange: db.price_range,
       status: db.status,
       ratings: db.ratings || { taste: 0, atmosphere: 0, cospa: 0, overall: 0 },
-      comment: db.comment, image: db.image, createdAt: db.created_at
+      comment: db.comment, image: db.image, image2: db.image2, createdAt: db.created_at
     }));
     processGroupedStores(mapped);
   } catch (e) {
@@ -83,6 +84,21 @@ const submitReview = async (payload) => {
   if (error) throw error;
   await loadData();
   return data;
+};
+
+const updateReview = async (id, payload) => {
+  if (!state.supabase) throw new Error('Supabase未接続');
+  const { data, error } = await state.supabase.from('restaurants').update(payload).eq('id', id).select();
+  if (error) throw error;
+  await loadData();
+  return data;
+};
+
+const deleteReview = async (id) => {
+  if (!state.supabase) throw new Error('Supabase未接続');
+  const { error } = await state.supabase.from('restaurants').delete().eq('id', id);
+  if (error) throw error;
+  await loadData();
 };
 
 // ===== MODAL =====
@@ -119,6 +135,41 @@ window.updateFormSlider = (id, val) => {
   if (id === 'overall') {
     renderPigRating(parseFloat(val), 'form-pig-overall', 20);
   }
+};
+
+// ===== FILTERING =====
+window.getFilteredStores = () => {
+  return state.groupedStores.filter(store => {
+    const f = state.filters;
+    let match = true;
+    
+    if (f.scene !== 'all') {
+      match = match && store.reviews.some(r => r.scenes && r.scenes.includes(f.scene));
+    }
+    if (f.timeSlot !== 'all') {
+      match = match && store.reviews.some(r => r.timeSlot === f.timeSlot);
+    }
+    if (f.priceRange !== 'all') {
+      match = match && store.reviews.some(r => r.priceRange === f.priceRange);
+    }
+    if (f.user && f.user.trim() !== '') {
+      match = match && store.reviews.some(r => (r.userName || '').includes(f.user.trim()));
+    }
+    if (f.pref !== 'all') {
+      match = match && store.address && store.address.includes(f.pref);
+    }
+    if (f.distance !== 'all' && state.userLocation) {
+      const userLat = Array.isArray(state.userLocation) ? state.userLocation[0] : state.userLocation.lat;
+      const userLng = Array.isArray(state.userLocation) ? state.userLocation[1] : state.userLocation.lng;
+      const d = window.calculateDistance(userLat, userLng, store.lat, store.lng);
+      if (d !== null) {
+        if (f.distance === '1' && d > 1) match = false;
+        if (f.distance === '5' && d > 5) match = false;
+        if (f.distance === '10' && d > 10) match = false;
+      }
+    }
+    return match;
+  });
 };
 
 // ===== NAVIGATION =====
@@ -172,6 +223,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('shokuboo_user', userName);
 
     const status = document.querySelector('input[name="status"]:checked').value;
+    const scenes = Array.from(document.querySelectorAll('input[name="f-scenes"]:checked')).map(el => el.value);
+    const timeSlot = document.querySelector('input[name="f-timeslot"]:checked');
+    const priceRange = document.getElementById('f-pricerange').value;
+    
     const payload = {
       user_name: userName,
       name: document.getElementById('f-name').value.trim(),
@@ -179,6 +234,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       address: document.getElementById('f-address').value.trim(),
       lat: parseFloat(document.getElementById('f-lat').value) || null,
       lng: parseFloat(document.getElementById('f-lng').value) || null,
+      time_slot: timeSlot ? timeSlot.value : null,
+      price_range: priceRange || null,
+      scenes: scenes,
       status,
       ratings: status === 'wishlist'
         ? { taste: 0, atmosphere: 0, cospa: 0, overall: 0 }
@@ -189,17 +247,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             cospa: parseFloat(document.getElementById('sl-cospa').value)
           },
       comment: document.getElementById('f-comment').value.trim(),
-      image: document.getElementById('f-image-base64') ? document.getElementById('f-image-base64').value : null,
+      image: document.getElementById('f-image1-base64') ? document.getElementById('f-image1-base64').value : null,
+      image2: document.getElementById('f-image2-base64') ? document.getElementById('f-image2-base64').value : null,
       created_at: new Date().toISOString()
     };
 
+    const editId = document.getElementById('f-id') ? document.getElementById('f-id').value : '';
+
     const btn = e.target.querySelector('button[type="submit"]');
     const oldTxt = btn.textContent;
-    btn.textContent = '投稿中...';
+    btn.textContent = editId ? '更新中...' : '投稿中...';
     btn.disabled = true;
 
     try {
-      await submitReview(payload);
+      if (editId) {
+        delete payload.created_at;
+        await updateReview(editId, payload);
+      } else {
+        await submitReview(payload);
+      }
       document.getElementById('modal-add').classList.remove('active');
       switchView('home');
     } catch (err) {
@@ -207,6 +273,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.textContent = oldTxt;
       btn.disabled = false;
     }
+  });
+
+  // Search form submit
+  document.getElementById('search-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    updateState({
+      filters: {
+        ...state.filters,
+        pref: document.getElementById('s-pref').value,
+        priceRange: document.getElementById('s-pricerange').value,
+        timeSlot: document.getElementById('s-timeslot').value,
+        scene: document.getElementById('s-scene').value,
+        distance: document.getElementById('s-distance') ? document.getElementById('s-distance').value : 'all',
+        user: document.getElementById('s-user').value
+      }
+    });
+    document.getElementById('modal-search').classList.remove('active');
+    
+    // Re-render current view with new filters
+    if (state.currentTab === 'home') renderTimeline();
+    if (state.currentTab === 'ranking') renderRanking();
+    if (state.currentTab === 'map') updateMapMarkers();
   });
 
   // Hot reload for userLocation

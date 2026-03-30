@@ -46,7 +46,7 @@ const renderTimeline = () => {
   const emptyEl = document.getElementById('empty-state');
   if (!container) return;
   container.innerHTML = '';
-  const stores = state.groupedStores;
+  const stores = window.getFilteredStores();
   if (stores.length === 0) {
     if (emptyEl) emptyEl.style.display = 'block';
     return;
@@ -97,7 +97,7 @@ const renderRanking = () => {
   const container = document.getElementById('ranking-list');
   if (!container) return;
   container.innerHTML = '<h2 style="padding:10px 10px 0;">🏆 評価ランキング</h2>';
-  const sorted = [...state.groupedStores]
+  const sorted = [...window.getFilteredStores()]
     .filter(s => s.isVisited)
     .sort((a, b) => b.overallRating - a.overallRating);
   if (sorted.length === 0) {
@@ -132,7 +132,13 @@ const openDetail = (store) => {
     <div style="background:var(--bg);border-radius:16px;padding:12px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:6px;">
         <span style="font-weight:700;">👤 ${re.userName}</span>
-        <span style="color:var(--text-muted);">${new Date(re.createdAt).toLocaleDateString('ja-JP')}</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="color:var(--text-muted);">${new Date(re.createdAt).toLocaleDateString('ja-JP')}</span>
+          ${re.userName === localStorage.getItem('shokuboo_user') ? `
+            <button onclick="window.editPost('${re.id}')" style="background:none;border:none;color:var(--primary);font-size:0.8rem;font-weight:700;">変更</button>
+            <button onclick="window.deletePost('${re.id}')" style="background:none;border:none;color:#ff4444;font-size:0.8rem;font-weight:700;">削除</button>
+          ` : ''}
+        </div>
       </div>
       ${re.status === 'visited'
         ? `<div style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;">
@@ -149,6 +155,7 @@ const openDetail = (store) => {
         : `<div style="margin-bottom:6px; font-size:0.8rem; color:var(--primary); font-weight:700;">⭐ 行きたい！</div>`}
       <p style="margin:0;font-size:0.9rem;">${re.comment || '（コメントなし）'}</p>
       ${re.image ? `<img src="${re.image}" style="width:100%;border-radius:8px;margin-top:8px;">` : ''}
+      ${re.image2 ? `<img src="${re.image2}" style="width:100%;border-radius:8px;margin-top:8px;">` : ''}
     </div>`).join('');
 
   const safeName = store.name.replace(/'/g, "\\'");
@@ -183,7 +190,9 @@ const openDetail = (store) => {
 const renderAddForm = (initialData = {}) => {
   const form = document.getElementById('add-form');
   const storedUser = localStorage.getItem('shokuboo_user') || '';
+  const isEdit = !!initialData.id;
   form.innerHTML = `
+    <input type="hidden" id="f-id" value="${initialData.id||''}">
     <div style="display:flex;gap:10px;margin-bottom:20px;background:var(--bg);padding:4px;border-radius:12px;">
       <label id="lbl-visited" style="flex:1;text-align:center;padding:8px;border-radius:10px;cursor:pointer;">
         <input type="radio" name="status" value="visited" checked style="display:none" onchange="window.toggleFormStatus(this.value)"> 🐷 行った
@@ -194,7 +203,7 @@ const renderAddForm = (initialData = {}) => {
     </div>
     <div style="margin-bottom:14px;">
       <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">👤 投稿者名</label>
-      <input type="text" id="f-user" value="${storedUser}" placeholder="例: めなか" required style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:1rem;">
+      <input type="text" id="f-user" value="${initialData.userName || storedUser}" placeholder="例: めなか" required style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:1rem;" ${isEdit ? 'readonly' : ''}>
     </div>
     <div style="margin-bottom:14px;">
       <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">🏪 店名</label>
@@ -212,42 +221,72 @@ const renderAddForm = (initialData = {}) => {
       </div>
     </div>
     <div style="margin-bottom:14px;">
-      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">📸 写真 (任意)</label>
-      <input type="file" id="f-image" accept="image/*" style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:12px;font-size:0.8rem;background:white;" onchange="window.resizeImage(event)">
-      <input type="hidden" id="f-image-base64" value="">
-      <img id="img-preview" style="display:none; width:100%; margin-top:10px; border-radius:12px; max-height:200px; object-fit:cover;">
+      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">📸 写真1 (任意)</label>
+      <input type="file" accept="image/*" style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:12px;font-size:0.8rem;background:white;" onchange="window.resizeImage(event, 'f-image1-base64', 'img-preview1')">
+      <input type="hidden" id="f-image1-base64" value="${initialData.image||''}">
+      <img id="img-preview1" src="${initialData.image||''}" style="display:${initialData.image?'block':'none'}; width:100%; margin-top:10px; border-radius:12px; max-height:200px; object-fit:cover;">
     </div>
     <div style="margin-bottom:14px;">
-      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">🍜 ジャンル</label>
-      <select id="f-genre" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:white;font-size:1rem;">
-        ${GENRES.map(g => `<option value="${g}" ${g===(initialData.genre||'')?' selected':''}>${g}</option>`).join('')}
-      </select>
+      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">📸 写真2 (任意)</label>
+      <input type="file" accept="image/*" style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:12px;font-size:0.8rem;background:white;" onchange="window.resizeImage(event, 'f-image2-base64', 'img-preview2')">
+      <input type="hidden" id="f-image2-base64" value="${initialData.image2||''}">
+      <img id="img-preview2" src="${initialData.image2||''}" style="display:${initialData.image2?'block':'none'}; width:100%; margin-top:10px; border-radius:12px; max-height:200px; object-fit:cover;">
+    </div>
+    <div style="margin-bottom:14px; display:flex; gap:10px;">
+      <div style="flex:1;">
+        <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">🍜 ジャンル</label>
+        <select id="f-genre" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:white;font-size:1rem;">
+          ${GENRES.map(g => `<option value="${g}" ${g===(initialData.genre||'')?' selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">💰 価格帯</label>
+        <select id="f-pricerange" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:white;font-size:1rem;">
+          <option value="">未選択</option>
+          ${PRICE_RANGES.map(g => `<option value="${g}" ${g===(initialData.priceRange||'')?' selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">🕝 時間帯</label>
+      <div style="display:flex;gap:10px;">
+        ${TIME_SLOTS.map(t => `<label><input type="radio" name="f-timeslot" value="${t}" ${t===(initialData.timeSlot||'')?'checked':''}> ${t}</label>`).join('')}
+      </div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">🎉 利用シーン</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        ${SCENES.map(s => {
+          const checked = initialData.scenes && initialData.scenes.includes(s) ? 'checked' : '';
+          return `<label><input type="checkbox" name="f-scenes" value="${s}" ${checked}> ${s}</label>`;
+        }).join('')}
+      </div>
     </div>
     
     <div id="visited-fields">
       <div style="margin-bottom:20px; background:white; padding:15px; border-radius:16px; border:1px solid var(--border);">
         <label style="display:block;font-size:0.8rem;font-weight:800;margin-bottom:10px;color:var(--primary);">🐷 総合評価</label>
         <div style="display:flex;align-items:center;gap:12px;">
-          <input type="range" id="sl-overall" min="0.5" max="5.0" step="0.5" value="3.5" style="flex:1;" oninput="window.updateFormSlider('overall', this.value)">
+          <input type="range" id="sl-overall" min="0.5" max="5.0" step="0.5" value="${initialData.ratings?initialData.ratings.overall:'3.5'}" style="flex:1;" oninput="window.updateFormSlider('overall', this.value)">
           <div id="form-pig-overall" style="display:flex;gap:2px;"></div>
-          <span id="score-overall" style="font-weight:800;color:var(--primary);min-width:30px;">3.5</span>
+          <span id="score-overall" style="font-weight:800;color:var(--primary);min-width:30px;">${initialData.ratings?initialData.ratings.overall:'3.5'}</span>
         </div>
         
         <div style="margin-top:15px; border-top:1px dashed #eee; padding-top:15px; display:flex; flex-direction:column; gap:12px;">
           <div style="display:flex; align-items:center; gap:10px;">
             <label style="width:60px; font-size:0.7rem; font-weight:700;">👅 味</label>
-            <input type="range" id="sl-taste" min="0.5" max="5.0" step="0.5" value="3.0" style="flex:1;" oninput="window.updateFormSlider('taste', this.value)">
-            <span id="score-taste" style="font-size:0.8rem; width:25px;">3.0</span>
+            <input type="range" id="sl-taste" min="0.5" max="5.0" step="0.5" value="${initialData.ratings?initialData.ratings.taste:'3.0'}" style="flex:1;" oninput="window.updateFormSlider('taste', this.value)">
+            <span id="score-taste" style="font-size:0.8rem; width:25px;">${initialData.ratings?initialData.ratings.taste:'3.0'}</span>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
             <label style="width:60px; font-size:0.7rem; font-weight:700;">✨ 雰囲気</label>
-            <input type="range" id="sl-atmosphere" min="0.5" max="5.0" step="0.5" value="3.0" style="flex:1;" oninput="window.updateFormSlider('atmosphere', this.value)">
-            <span id="score-atmosphere" style="font-size:0.8rem; width:25px;">3.0</span>
+            <input type="range" id="sl-atmosphere" min="0.5" max="5.0" step="0.5" value="${initialData.ratings?initialData.ratings.atmosphere:'3.0'}" style="flex:1;" oninput="window.updateFormSlider('atmosphere', this.value)">
+            <span id="score-atmosphere" style="font-size:0.8rem; width:25px;">${initialData.ratings?initialData.ratings.atmosphere:'3.0'}</span>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
             <label style="width:60px; font-size:0.7rem; font-weight:700;">💰 コスパ</label>
-            <input type="range" id="sl-cospa" min="0.5" max="5.0" step="0.5" value="3.0" style="flex:1;" oninput="window.updateFormSlider('cospa', this.value)">
-            <span id="score-cospa" style="font-size:0.8rem; width:25px;">3.0</span>
+            <input type="range" id="sl-cospa" min="0.5" max="5.0" step="0.5" value="${initialData.ratings?initialData.ratings.cospa:'3.0'}" style="flex:1;" oninput="window.updateFormSlider('cospa', this.value)">
+            <span id="score-cospa" style="font-size:0.8rem; width:25px;">${initialData.ratings?initialData.ratings.cospa:'3.0'}</span>
           </div>
         </div>
       </div>
@@ -255,18 +294,22 @@ const renderAddForm = (initialData = {}) => {
 
     <div style="margin-bottom:20px;">
       <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">💭 感想・メモ</label>
-      <textarea id="f-comment" rows="3" placeholder="コメントを入力" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;font-family:inherit;font-size:1rem;"></textarea>
+      <textarea id="f-comment" rows="3" placeholder="コメントを入力" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;font-family:inherit;font-size:1rem;">${initialData.comment||''}</textarea>
     </div>
     <input type="hidden" id="f-lat" value="${initialData.lat||''}">
     <input type="hidden" id="f-lng" value="${initialData.lng||''}">
-    <button type="submit" style="width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:16px;font-weight:700;font-size:1rem;">投稿する</button>
+    <button type="submit" style="width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:16px;font-weight:700;font-size:1rem;">${isEdit ? '更新する' : '投稿する'}</button>
     <button type="button" onclick="window.closeModal('add')" style="width:100%;margin-top:10px;padding:12px;background:none;border:none;color:var(--text-muted);font-size:0.85rem;">キャンセル</button>`;
 
-  window.toggleFormStatus('visited');
-  window.updateFormSlider('overall', 3.5);
-  window.updateFormSlider('taste', 3.0);
-  window.updateFormSlider('atmosphere', 3.0);
-  window.updateFormSlider('cospa', 3.0);
+  window.toggleFormStatus(initialData.status || 'visited');
+  const selStatus = document.querySelector('input[name="status"][value="' + (initialData.status||'visited') + '"]');
+  if(selStatus) selStatus.checked = true;
+  
+  if(initialData.ratings) {
+    window.updateFormSlider('overall', initialData.ratings.overall);
+  } else {
+    window.updateFormSlider('overall', 3.5);
+  }
 };
 
 // Open Google Maps to let user copy the real address
@@ -329,7 +372,7 @@ window.searchAddress = async () => {
 };
 
 // Local image resize logic for lightweight base64 upload
-window.resizeImage = (event) => {
+window.resizeImage = (event, hiddenId, previewId) => {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -350,10 +393,10 @@ window.resizeImage = (event) => {
       ctx.drawImage(img, 0, 0, width, height);
       
       const base64 = canvas.toDataURL('image/jpeg', 0.8);
-      const hiddenInput = document.getElementById('f-image-base64');
+      const hiddenInput = document.getElementById(hiddenId);
       if (hiddenInput) hiddenInput.value = base64;
       
-      const preview = document.getElementById('img-preview');
+      const preview = document.getElementById(previewId);
       if (preview) {
         preview.src = base64;
         preview.style.display = 'block';
@@ -364,3 +407,81 @@ window.resizeImage = (event) => {
   reader.readAsDataURL(file);
 };
 
+window.editPost = (id) => {
+  const review = state.groupedStores.flatMap(s => s.reviews).find(r => r.id === id);
+  if (!review) return alert('投稿が見つかりません');
+  document.getElementById('modal-detail').classList.remove('active');
+  renderAddForm(review);
+  document.getElementById('modal-add').classList.add('active');
+};
+
+window.deletePost = async (id) => {
+  if (!confirm('本当にこの投稿を削除しますか？\n（復元できません）')) return;
+  try {
+    await deleteReview(id);
+    document.getElementById('modal-detail').classList.remove('active');
+    alert('投稿を削除しました');
+  } catch (e) {
+    alert('削除に失敗しました: ' + e.message);
+  }
+};
+
+window.openSearchModal = () => {
+  const isMap = state.currentTab === 'map';
+  const form = document.getElementById('search-form');
+  const f = state.filters;
+  
+  form.innerHTML = `
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">📍 都道府県</label>
+      <select id="s-pref" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:white;font-size:1rem;">
+        <option value="all">すべて</option>
+        ${PREFECTURES.map(p => `<option value="${p}" ${f.pref===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+    </div>
+    
+    <div style="margin-bottom:14px; display:flex; gap:10px;">
+      <div style="flex:1;">
+        <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">💰 価格帯</label>
+        <select id="s-pricerange" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:white;font-size:1rem;">
+          <option value="all">すべて</option>
+          ${PRICE_RANGES.map(g => `<option value="${g}" ${f.priceRange===g?'selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">🕝 時間帯</label>
+        <select id="s-timeslot" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:white;font-size:1rem;">
+          <option value="all">すべて</option>
+          ${TIME_SLOTS.map(t => `<option value="${t}" ${f.timeSlot===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">🎉 利用シーン</label>
+      <select id="s-scene" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:white;font-size:1rem;">
+        <option value="all">すべて</option>
+        ${SCENES.map(s => `<option value="${s}" ${f.scene===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">🚶‍♂️ 現在地からの距離</label>
+      <select id="s-distance" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:white;font-size:1rem;" ${!state.userLocation ? 'disabled' : ''}>
+        <option value="all">指定なし${!state.userLocation?' (現在地取得不可)':''}</option>
+        <option value="1" ${f.distance==='1'?'selected':''}>1km以内</option>
+        <option value="5" ${f.distance==='5'?'selected':''}>5km以内</option>
+        <option value="10" ${f.distance==='10'?'selected':''}>10km以内</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">👤 投稿者名</label>
+      <input type="text" id="s-user" value="${f.user||''}" placeholder="投稿者名が含まれる" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:1rem;">
+    </div>
+    
+    <button type="submit" style="width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:16px;font-weight:700;font-size:1rem;">検索する</button>
+    <button type="button" onclick="window.closeModal('search')" style="width:100%;margin-top:10px;padding:12px;background:none;border:none;color:var(--text-muted);font-size:0.85rem;">キャンセル</button>
+  `;
+  document.getElementById('modal-search').classList.add('active');
+};

@@ -3,7 +3,7 @@ const state = {
   restaurants: [],
   groupedStores: [],
   currentTab: 'home',
-  filters: { scene: 'all', user: 'all', status: 'all' },
+  filters: { timeSlot: 'all', priceRange: 'all', scene: 'all', pref: 'all', distance: 'all', user: '' },
   userLocation: null,
   map: null,
   markers: {},
