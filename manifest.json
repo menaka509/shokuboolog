@@ -1,16 +1,17 @@
 {
   "name": "食Booろぐ Powered by めなか",
   "short_name": "食Booろぐ",
-  "description": "仲間内で飲食店情報を共有できるWebアプリ",
-  "start_url": "./index.html",
+  "description": "友人同士で美味しいお店を共有・評価するソーシャルグルメアプリ",
+  "start_url": "index.html",
   "display": "standalone",
-  "background_color": "#FFF8F0",
-  "theme_color": "#E8521A",
+  "background_color": "#F7F7F7",
+  "theme_color": "#FF8A00",
   "icons": [
     {
       "src": "icon.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
