@@ -179,7 +179,6 @@ const switchView = (view) => {
     document.getElementById('modal-add').classList.add('active');
     return;
   }
-  if (view === 'settings') return; // placeholder
 
   document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -200,12 +199,19 @@ const switchView = (view) => {
       updateMapMarkers();
     }, 300);
   }
+  if (view === 'settings') renderSettings();
 };
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
   initSupabase();
   await loadData();
+
+  // Show saved username in header
+  const savedUser = localStorage.getItem('shokuboo_user');
+  if (savedUser) {
+    document.getElementById('user-display').textContent = `👤 ${savedUser}`;
+  }
 
   // Navigation
   document.querySelectorAll('.nav-item').forEach(el => {

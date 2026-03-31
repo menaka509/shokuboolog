@@ -4,6 +4,7 @@ const state = {
   groupedStores: [],
   currentTab: 'home',
   filters: { timeSlot: 'all', priceRange: 'all', scene: 'all', pref: 'all', distance: 'all', user: '' },
+  rankingFilters: { genre: 'all', pref: 'all' },
   userLocation: null,
   map: null,
   markers: {},

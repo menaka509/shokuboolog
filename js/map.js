@@ -56,7 +56,7 @@ const updateMapMarkers = () => {
   
   const newMarkers = {};
 
-  state.groupedStores.forEach(store => {
+  window.getFilteredStores().forEach(store => {
     if (!store.lat || !store.lng) return;
     
     const color = getMarkerColor(store);

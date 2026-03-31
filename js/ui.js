@@ -56,31 +56,46 @@ const renderTimeline = () => {
   stores.forEach((store, idx) => {
     const card = document.createElement('div');
     card.className = 'restaurant-card';
+    if (!store.isVisited) card.classList.add('wishlist-card');
     card.onclick = () => openDetail(store);
     const reviewers = [...new Set(store.reviews.map(re => re.userName))];
     const latestReview = store.reviews[0];
     const ratingId = `cr-idx-${idx}`;
+    const gc = GENRE_COLORS[store.genre] || GENRE_COLORS['その他'];
+    const scenes = [...new Set(store.reviews.flatMap(r => r.scenes || []))];
     
     card.innerHTML = `
-      ${latestReview.image
-        ? `<img src="${latestReview.image}" class="card-image" alt="photo">`
-        : `<div class="card-image" style="display:flex;align-items:center;justify-content:center;font-size:3rem;background:#f5e6d8;">🐷</div>`}
+      <div style="position:relative;">
+        ${latestReview.image
+          ? `<img src="${latestReview.image}" class="card-image" alt="photo">`
+          : `<div class="card-image" style="display:flex;align-items:center;justify-content:center;font-size:3rem;background:#f5e6d8;">🐷</div>`}
+        ${!store.isVisited ? `<div style="position:absolute;top:12px;left:0;background:linear-gradient(135deg,#FFD700,#FFA500);color:white;padding:5px 18px 5px 12px;font-weight:800;font-size:0.75rem;border-radius:0 20px 20px 0;box-shadow:0 2px 8px rgba(255,165,0,0.4);">⭐ 行きたい！</div>` : ''}
+      </div>
       <div class="card-body">
         <div class="card-header">
-          <div>
+          <div style="flex:1;min-width:0;">
             <h3 class="card-name">${store.name}</h3>
             <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">📍 ${store.address || '住所未登録'} <span style="font-weight:700;color:var(--primary);">${window.formatDistance(store.lat, store.lng)}</span></div>
           </div>
-          <span class="card-genre">${store.genre || 'グルメ'}</span>
+          <span class="card-genre" style="background:${gc.bg};color:${gc.text};">${store.genre || 'グルメ'}</span>
         </div>
+        ${store.isVisited ? `
         <div class="rating-row">
           <div id="${ratingId}" class="pig-rating"></div>
-          <span style="font-weight:700;font-size:1.1rem;color:var(--primary)">${store.isVisited ? store.overallRating.toFixed(1) : '⭐'}</span>
+          <span style="font-weight:700;font-size:1.1rem;color:var(--primary)">${store.overallRating.toFixed(1)}</span>
           <span class="user-count">${reviewers.length}人の評価</span>
-        </div>
+        </div>` : `
+        <div class="rating-row">
+          <span style="font-weight:700;font-size:0.9rem;color:#D48806;">⭐ まだ未訪問</span>
+          <span class="user-count">${reviewers.length}人がマーク</span>
+        </div>`}
         <div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">
           ${reviewers.map(n => `<span style="background:var(--bg);padding:2px 8px;border-radius:10px;font-size:0.65rem;color:var(--text-muted)">👤 ${n}</span>`).join('')}
         </div>
+        ${scenes.length > 0 ? `
+        <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
+          ${scenes.map(s => `<span class="scene-tag">🎉 ${s}</span>`).join('')}
+        </div>` : ''}
         ${store.isVisited ? `
         <div style="margin-top:8px;display:flex;gap:8px;font-size:0.75rem;color:var(--text-muted);font-weight:700;">
           <span>👅 ${store.tasteRating.toFixed(1)}</span>
@@ -96,15 +111,30 @@ const renderTimeline = () => {
 const renderRanking = () => {
   const container = document.getElementById('ranking-list');
   if (!container) return;
-  container.innerHTML = '<h2 style="padding:10px 10px 0;">🏆 評価ランキング</h2>';
-  const sorted = [...window.getFilteredStores()]
-    .filter(s => s.isVisited)
-    .sort((a, b) => b.overallRating - a.overallRating);
+  const rg = state.rankingFilters?.genre || 'all';
+  const rp = state.rankingFilters?.pref || 'all';
+  container.innerHTML = `
+    <h2 style="padding:10px 10px 0;">🏆 評価ランキング</h2>
+    <div style="padding:0 10px 10px;display:flex;gap:8px;">
+      <select id="rank-genre" onchange="window.filterRanking()" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:10px;background:white;font-size:0.85rem;">
+        <option value="all">全ジャンル</option>
+        ${GENRES.map(g => `<option value="${g}" ${rg===g?'selected':''}>${g}</option>`).join('')}
+      </select>
+      <select id="rank-pref" onchange="window.filterRanking()" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:10px;background:white;font-size:0.85rem;">
+        <option value="all">全エリア</option>
+        ${PREFECTURES.map(p => `<option value="${p}" ${rp===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+    </div>`;
+  let sorted = [...window.getFilteredStores()].filter(s => s.isVisited);
+  if (rg !== 'all') sorted = sorted.filter(s => s.genre === rg);
+  if (rp !== 'all') sorted = sorted.filter(s => s.address && s.address.includes(rp));
+  sorted.sort((a, b) => b.overallRating - a.overallRating);
   if (sorted.length === 0) {
-    container.innerHTML += '<p style="text-align:center;color:var(--text-muted);padding:20px;">評価済みのお店がまだありません</p>';
+    container.innerHTML += '<p style="text-align:center;color:var(--text-muted);padding:20px;">該当するお店がありません</p>';
     return;
   }
   sorted.forEach((store, i) => {
+    const gc = GENRE_COLORS[store.genre] || GENRE_COLORS['その他'];
     const ratingId = `rr-idx-${i}`;
     const item = document.createElement('div');
     item.className = 'restaurant-card';
@@ -119,11 +149,19 @@ const renderRanking = () => {
             <span style="font-weight:700;margin-left:4px;">${store.overallRating.toFixed(1)}</span>
           </div>
         </div>
-        <span class="card-genre">${store.genre}</span>
+        <span class="card-genre" style="background:${gc.bg};color:${gc.text};">${store.genre}</span>
       </div>`;
     container.appendChild(item);
     renderPigRating(store.overallRating, ratingId, 14);
   });
+};
+
+window.filterRanking = () => {
+  state.rankingFilters = {
+    genre: document.getElementById('rank-genre').value,
+    pref: document.getElementById('rank-pref').value
+  };
+  renderRanking();
 };
 
 const openDetail = (store) => {
@@ -171,8 +209,8 @@ const openDetail = (store) => {
     <div style="display:flex;gap:10px;margin-bottom:20px;">
       <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((store.name||'')+' '+(store.address||''))}"
          target="_blank" style="flex:1;background:var(--bg);padding:10px;border-radius:12px;text-decoration:none;text-align:center;color:var(--text);font-size:0.8rem;font-weight:700;">🗺 Maps</a>
-      <a href="https://tabelog.com/rst/rstsearch/?sk=${encodeURIComponent(store.name||'')}"
-         target="_blank" style="flex:1;background:var(--bg);padding:10px;border-radius:12px;text-decoration:none;text-align:center;color:var(--text);font-size:0.8rem;font-weight:700;">🍽 食べログ</a>
+      <a href="https://tabelog.com/rstLst/?vs=1&sa=&sk=${encodeURIComponent(store.name||'')}"
+         target="_blank" style="flex:1;background:var(--bg);padding:10px;border-radius:12px;text-decoration:none;text-align:center;color:var(--text);font-size:0.8rem;font-weight:700;">🍽 食べログで検索</a>
     </div>
     <div style="font-weight:700;margin-bottom:12px;">📣 みんなの投稿 (${store.reviews.length})</div>
     <div style="max-height:360px;overflow-y:auto;">${reviewsHtml}</div>
@@ -491,7 +529,84 @@ window.openSearchModal = () => {
     </div>
     
     <button type="submit" style="width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:16px;font-weight:700;font-size:1rem;">検索する</button>
+    <button type="button" onclick="window.clearSearchFilters()" style="width:100%;margin-top:8px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:16px;font-weight:700;font-size:0.9rem;color:var(--text-muted);">🗑 条件をリセット</button>
     <button type="button" onclick="window.closeModal('search')" style="width:100%;margin-top:10px;padding:12px;background:none;border:none;color:var(--text-muted);font-size:0.85rem;">キャンセル</button>
   `;
   document.getElementById('modal-search').classList.add('active');
+};
+
+window.clearSearchFilters = () => {
+  updateState({
+    filters: { timeSlot: 'all', priceRange: 'all', scene: 'all', pref: 'all', distance: 'all', user: '' }
+  });
+  document.getElementById('modal-search').classList.remove('active');
+  if (state.currentTab === 'home') renderTimeline();
+  if (state.currentTab === 'ranking') renderRanking();
+  if (state.currentTab === 'map') updateMapMarkers();
+};
+
+const renderSettings = () => {
+  const container = document.getElementById('settings-content');
+  if (!container) return;
+  const currentUser = localStorage.getItem('shokuboo_user') || '';
+  const allReviews = state.groupedStores.flatMap(s => s.reviews);
+  const userPosts = allReviews.filter(r => r.userName === currentUser);
+  const totalStores = state.groupedStores.length;
+
+  container.innerHTML = `
+    <h2 style="margin:0 0 20px;">⚙️ 設定</h2>
+
+    <div style="background:white;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+      <div style="font-weight:700;margin-bottom:10px;font-size:0.85rem;">👤 投稿者名</div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="setting-username" value="${currentUser}" placeholder="投稿者名を入力" style="flex:1;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:1rem;">
+        <button onclick="window.saveUsername()" style="background:var(--primary);color:white;border:none;border-radius:12px;padding:0 20px;font-weight:700;">保存</button>
+      </div>
+    </div>
+
+    <div style="background:white;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+      <div style="font-weight:700;margin-bottom:12px;font-size:0.85rem;">📊 統計</div>
+      <div style="display:flex;gap:12px;text-align:center;">
+        <div style="flex:1;background:var(--bg);border-radius:12px;padding:12px;">
+          <div style="font-size:2rem;font-weight:800;color:var(--primary);">${totalStores}</div>
+          <div style="color:var(--text-muted);font-size:0.7rem;">登録店舗数</div>
+        </div>
+        <div style="flex:1;background:var(--bg);border-radius:12px;padding:12px;">
+          <div style="font-size:2rem;font-weight:800;color:#389E0D;">${userPosts.filter(r=>r.status==='visited').length}</div>
+          <div style="color:var(--text-muted);font-size:0.7rem;">あなたの訪問</div>
+        </div>
+        <div style="flex:1;background:var(--bg);border-radius:12px;padding:12px;">
+          <div style="font-size:2rem;font-weight:800;color:#D48806;">${userPosts.filter(r=>r.status==='wishlist').length}</div>
+          <div style="color:var(--text-muted);font-size:0.7rem;">行きたい</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:white;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+      <div style="font-weight:700;margin-bottom:10px;font-size:0.85rem;">🔧 データ管理</div>
+      <button onclick="window.clearAppCache()" style="width:100%;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:12px;font-size:0.85rem;color:var(--text);">キャッシュをクリア</button>
+    </div>
+
+    <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.75rem;">
+      <div>🐷 食Booろぐ v1.1</div>
+      <div style="margin-top:4px;">Powered by めなか</div>
+    </div>
+  `;
+};
+
+window.saveUsername = () => {
+  const name = document.getElementById('setting-username').value.trim();
+  if (!name) return alert('名前を入力してください');
+  localStorage.setItem('shokuboo_user', name);
+  document.getElementById('user-display').textContent = `👤 ${name}`;
+  alert('投稿者名を保存しました');
+};
+
+window.clearAppCache = async () => {
+  if (!confirm('キャッシュをクリアしますか？')) return;
+  if ('caches' in window) {
+    const names = await caches.keys();
+    await Promise.all(names.map(n => caches.delete(n)));
+  }
+  alert('キャッシュをクリアしました');
 };
