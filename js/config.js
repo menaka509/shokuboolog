@@ -21,3 +21,23 @@ const GENRE_COLORS = {
   'スイーツ': { bg: '#FCF4FF', text: '#9254DE' },
   'その他': { bg: '#F5F5F5', text: '#595959' }
 };
+
+const GENRE_ICONS = {
+  '和食': '🍱', '洋食': '🍳', '中華': '🥟', 'イタリアン': '🍝',
+  'フレンチ': '🥐', '焼肉': '🥩', '寿司': '🍣', 'ラーメン': '🍜',
+  '居酒屋': '🍶', 'カフェ': '☕', 'スイーツ': '🍰', 'その他': '🍽️'
+};
+
+const SCENE_ICONS = {
+  '接待': '🤝', '飲み会': '🍻', 'デート': '💑',
+  'おひとり様': '🧘', 'ファミリー': '👨‍👩‍👧‍👦', 'チートデイ': '🤤'
+};
+
+const PRICE_MIDPOINTS = {
+  '〜1999円': 1000, '2000円〜3999円': 3000, '4000円〜5999円': 5000,
+  '6000円〜7999円': 7000, '8000円〜9999円': 9000, '10000円以上': 12000
+};
+
+// SHA-256 hash of the site password. Default: "seabura3733"
+// To change: run `echo -n "新パスワード" | shasum -a 256` and replace this value.
+const SITE_PASSWORD_HASH = 'e4f066af71b27cc8ff3ce5f9e868a3ac33b2a318cbc40e792650c41eeda7f57e';

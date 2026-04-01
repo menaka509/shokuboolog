@@ -204,6 +204,14 @@ const switchView = (view) => {
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
+  // Password gate check
+  if (sessionStorage.getItem('shokuboo_auth') === 'ok') {
+    document.getElementById('password-gate').classList.add('hidden');
+    document.getElementById('app').style.display = '';
+  } else {
+    // Stay on password gate, but still init Supabase in background
+  }
+
   initSupabase();
   await loadData();
 

@@ -18,7 +18,22 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <div id="app">
+  <!-- Password Gate -->
+  <div id="password-gate">
+    <div style="text-align:center;padding:40px 30px;max-width:360px;width:100%;">
+      <div style="font-size:5rem;margin-bottom:10px;">🐷</div>
+      <h1 style="color:var(--primary);margin:0 0 4px;font-size:1.6rem;">食Booろぐ</h1>
+      <p style="color:var(--text-muted);margin:0 0 30px;font-size:0.85rem;">Powered by めなか</p>
+      <input type="password" id="gate-password" placeholder="パスワードを入力"
+        style="width:100%;padding:14px;border:1px solid var(--border);border-radius:14px;font-size:1rem;text-align:center;margin-bottom:12px;"
+        onkeydown="if(event.key==='Enter')window.checkSitePassword()">
+      <button onclick="window.checkSitePassword()"
+        style="width:100%;padding:14px;background:var(--primary);color:white;border:none;border-radius:14px;font-weight:700;font-size:1rem;">入場する 🔑</button>
+      <div id="gate-error" style="color:#ff4444;font-size:0.8rem;margin-top:10px;display:none;">パスワードが違います</div>
+    </div>
+  </div>
+
+  <div id="app" style="display:none;">
     <!-- Header -->
     <header>
       <h1><span>🐷</span> 食Booろぐ</h1>

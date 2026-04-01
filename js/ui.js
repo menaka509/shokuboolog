@@ -62,7 +62,23 @@ const renderTimeline = () => {
     const latestReview = store.reviews[0];
     const ratingId = `cr-idx-${idx}`;
     const gc = GENRE_COLORS[store.genre] || GENRE_COLORS['その他'];
+    const gi = GENRE_ICONS[store.genre] || GENRE_ICONS['その他'];
     const scenes = [...new Set(store.reviews.flatMap(r => r.scenes || []))];
+    
+    // Calculate price averages by time slot
+    const priceBySlot = {};
+    store.reviews.forEach(r => {
+      if (r.priceRange && PRICE_MIDPOINTS[r.priceRange]) {
+        const slot = r.timeSlot || '不明';
+        if (!priceBySlot[slot]) priceBySlot[slot] = [];
+        priceBySlot[slot].push(PRICE_MIDPOINTS[r.priceRange]);
+      }
+    });
+    const priceHtml = Object.keys(priceBySlot).map(slot => {
+      const avg = Math.round(priceBySlot[slot].reduce((a,b) => a+b, 0) / priceBySlot[slot].length);
+      const icon = slot === 'ランチ' ? '☀️' : slot === 'ディナー' ? '🌙' : '🍽';
+      return `<span>${icon} 約${avg.toLocaleString()}円</span>`;
+    }).join('');
     
     card.innerHTML = `
       <div style="position:relative;">
@@ -77,7 +93,7 @@ const renderTimeline = () => {
             <h3 class="card-name">${store.name}</h3>
             <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">📍 ${store.address || '住所未登録'} <span style="font-weight:700;color:var(--primary);">${window.formatDistance(store.lat, store.lng)}</span></div>
           </div>
-          <span class="card-genre" style="background:${gc.bg};color:${gc.text};">${store.genre || 'グルメ'}</span>
+          <span class="card-genre" style="background:${gc.bg};color:${gc.text};">${gi} ${store.genre || 'グルメ'}</span>
         </div>
         ${store.isVisited ? `
         <div class="rating-row">
@@ -89,12 +105,13 @@ const renderTimeline = () => {
           <span style="font-weight:700;font-size:0.9rem;color:#D48806;">⭐ まだ未訪問</span>
           <span class="user-count">${reviewers.length}人がマーク</span>
         </div>`}
+        ${priceHtml ? `<div style="margin-top:6px;display:flex;gap:10px;font-size:0.7rem;color:var(--text-muted);font-weight:700;">${priceHtml}</div>` : ''}
         <div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">
           ${reviewers.map(n => `<span style="background:var(--bg);padding:2px 8px;border-radius:10px;font-size:0.65rem;color:var(--text-muted)">👤 ${n}</span>`).join('')}
         </div>
         ${scenes.length > 0 ? `
         <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
-          ${scenes.map(s => `<span class="scene-tag">🎉 ${s}</span>`).join('')}
+          ${scenes.map(s => `<span class="scene-tag">${SCENE_ICONS[s]||'🎉'} ${s}</span>`).join('')}
         </div>` : ''}
         ${store.isVisited ? `
         <div style="margin-top:8px;display:flex;gap:8px;font-size:0.75rem;color:var(--text-muted);font-weight:700;">
@@ -149,7 +166,7 @@ const renderRanking = () => {
             <span style="font-weight:700;margin-left:4px;">${store.overallRating.toFixed(1)}</span>
           </div>
         </div>
-        <span class="card-genre" style="background:${gc.bg};color:${gc.text};">${store.genre}</span>
+        <span class="card-genre" style="background:${gc.bg};color:${gc.text};">${GENRE_ICONS[store.genre]||'🍽️'} ${store.genre}</span>
       </div>`;
     container.appendChild(item);
     renderPigRating(store.overallRating, ratingId, 14);
@@ -259,16 +276,15 @@ const renderAddForm = (initialData = {}) => {
       </div>
     </div>
     <div style="margin-bottom:14px;">
-      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">📸 写真1 (任意)</label>
-      <input type="file" accept="image/*" style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:12px;font-size:0.8rem;background:white;" onchange="window.resizeImage(event, 'f-image1-base64', 'img-preview1')">
-      <input type="hidden" id="f-image1-base64" value="${initialData.image||''}">
-      <img id="img-preview1" src="${initialData.image||''}" style="display:${initialData.image?'block':'none'}; width:100%; margin-top:10px; border-radius:12px; max-height:200px; object-fit:cover;">
-    </div>
-    <div style="margin-bottom:14px;">
-      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">📸 写真2 (任意)</label>
-      <input type="file" accept="image/*" style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:12px;font-size:0.8rem;background:white;" onchange="window.resizeImage(event, 'f-image2-base64', 'img-preview2')">
-      <input type="hidden" id="f-image2-base64" value="${initialData.image2||''}">
-      <img id="img-preview2" src="${initialData.image2||''}" style="display:${initialData.image2?'block':'none'}; width:100%; margin-top:10px; border-radius:12px; max-height:200px; object-fit:cover;">
+      <label style="display:block;font-size:0.75rem;font-weight:700;margin-bottom:4px;color:var(--text-muted);">📸 写真 (最大2枚)</label>
+      <input type="file" accept="image/*" multiple style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:12px;font-size:0.8rem;background:white;" onchange="window.handleMultipleImages(event)">
+      <input type="hidden" id="f-image1-base64" value="${initialData.image||""}">
+      <input type="hidden" id="f-image2-base64" value="${initialData.image2||""}">
+      <div id="photo-previews" style="display:flex;gap:8px;margin-top:10px;">
+        <img id="img-preview1" src="${initialData.image||""}" style="display:${initialData.image?'block':'none'}; flex:1; border-radius:12px; max-height:160px; object-fit:cover;">
+        <img id="img-preview2" src="${initialData.image2||""}" style="display:${initialData.image2?'block':'none'}; flex:1; border-radius:12px; max-height:160px; object-fit:cover;">
+      </div>
+      <div style="font-size:0.6rem;color:var(--text-muted);margin-top:4px;">※まとめて2枚まで選択できます</div>
     </div>
     <div style="margin-bottom:14px; display:flex; gap:10px;">
       <div style="flex:1;">
@@ -409,40 +425,62 @@ window.searchAddress = async () => {
   }
 };
 
-// Local image resize logic for lightweight base64 upload
+// Resize a single image file to base64
+const resizeImageFile = (file) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+// Handle multiple image upload (up to 2)
+window.handleMultipleImages = async (event) => {
+  const files = Array.from(event.target.files).slice(0, 2);
+  if (files.length === 0) return;
+  
+  for (let i = 0; i < files.length; i++) {
+    const base64 = await resizeImageFile(files[i]);
+    const hiddenId = i === 0 ? 'f-image1-base64' : 'f-image2-base64';
+    const previewId = i === 0 ? 'img-preview1' : 'img-preview2';
+    const hiddenInput = document.getElementById(hiddenId);
+    if (hiddenInput) hiddenInput.value = base64;
+    const preview = document.getElementById(previewId);
+    if (preview) {
+      preview.src = base64;
+      preview.style.display = 'block';
+    }
+  }
+};
+
+// Legacy single file handler (kept for compatibility)
 window.resizeImage = (event, hiddenId, previewId) => {
   const file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const MAX_WIDTH = 800;
-      let width = img.width;
-      let height = img.height;
-      if (width > MAX_WIDTH) {
-        height = Math.round((height * MAX_WIDTH) / width);
-        width = MAX_WIDTH;
-      }
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      const base64 = canvas.toDataURL('image/jpeg', 0.8);
-      const hiddenInput = document.getElementById(hiddenId);
-      if (hiddenInput) hiddenInput.value = base64;
-      
-      const preview = document.getElementById(previewId);
-      if (preview) {
-        preview.src = base64;
-        preview.style.display = 'block';
-      }
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+  resizeImageFile(file).then(base64 => {
+    const hiddenInput = document.getElementById(hiddenId);
+    if (hiddenInput) hiddenInput.value = base64;
+    const preview = document.getElementById(previewId);
+    if (preview) { preview.src = base64; preview.style.display = 'block'; }
+  });
 };
 
 window.editPost = (id) => {
@@ -609,4 +647,23 @@ window.clearAppCache = async () => {
     await Promise.all(names.map(n => caches.delete(n)));
   }
   alert('キャッシュをクリアしました');
+};
+
+// ===== PASSWORD AUTH =====
+window.checkSitePassword = async () => {
+  const input = document.getElementById('gate-password').value;
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  if (hash === SITE_PASSWORD_HASH) {
+    sessionStorage.setItem('shokuboo_auth', 'ok');
+    document.getElementById('password-gate').classList.add('hidden');
+    document.getElementById('app').style.display = '';
+  } else {
+    document.getElementById('gate-error').style.display = 'block';
+    document.getElementById('gate-password').value = '';
+  }
 };
